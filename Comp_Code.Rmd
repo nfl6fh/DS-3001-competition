@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(tidyverse)
+library(dplyr)
 library(caret)
 library(ROCR)
 library(MLmetrics)
@@ -21,7 +22,8 @@ library(rpart.plot)
 ```
 
 ```{r}
-states <- read.csv("C:/Users/Student/ds3001competition/DS-3001-competition/data/states_all_2_training.csv")
+states <- read.csv("data/states_all_2_training.csv", na.strings=c('',NA))
+states_dropped <- states %>% drop_na(GRADES_ALL_G)
 
 str(states)
 
@@ -48,4 +50,73 @@ sum(!complete.cases(states))
 mice::md.pattern(states)
 unique(states$STATE)
 
+remove_cols <- c(24,22,19,18,17,16,14,13,3)
+states1 <- states[,-remove_cols]
+mice::md.pattern(states1)
+states2 <- states1[complete.cases(states1),]
+```
+
+Creating model with complete cases only
+
+```{r}
+tune_train_index <- createDataPartition(states2$AVG_READING_4_SCORE, p=.8,
+                                   list=F,
+                                   times=1)
+
+train <- states2[tune_train_index,]
+dim(train)
+
+tune <- states2[-tune_train_index,]
+dim(tune)
+
+fitControl <- trainControl(method = "repeatedcv",
+                          number = 10,
+                          repeats = 5) 
+
+features <- train[,-15]
+target <- train$AVG_READING_4_SCORE
+
+set.seed(1999)
+myDT <- train(x=features,
+                y=target,
+                method="rpart2",
+                trControl=fitControl,
+                metric="RMSE")
+
+plot(myDT)
+varImp(myDT)
+df_pred <- predict(myDT$finalModel, tune)
+df_pred
+
+postResample(df_pred, tune$AVG_READING_4_SCORE)
+range(tune$AVG_READING_4_SCORE)
+3.75/30
+
+tree.grid <- expand.grid(maxdepth=c(3:20))
+
+myDT1 <- train(x=features,
+                y=target,
+                method="rpart2",
+                trControl=fitControl,
+                tuneGrid=tree.grid,
+                metric="RMSE")
+
+plot(myDT1)
+varImp(myDT1)
+df_pred1 <- predict(myDT1$finalModel, tune)
+postResample(df_pred1, tune$AVG_READING_4_SCORE)
+```
+
+Training on full dataset
+
+```{r}
+full.features <- states2[,-15]
+full.target <- states2$AVG_READING_4_SCORE
+
+full.myDT <- train(x=full.features,
+                y=full.target,
+                method="rpart2",
+                trControl=fitControl,
+                tuneGrid=tree.grid,
+                metric="RMSE")
 ```
