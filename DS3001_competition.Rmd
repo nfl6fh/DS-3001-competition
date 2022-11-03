@@ -1,0 +1,306 @@
+---
+Title: "Competition Code"
+authors: "Nate Lindley, Aidan Hijazi-Klop, Alex Williams, Lyle Johnson"
+date: "10/27/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Loading Necessary Libraries
+```{r}
+library(tidyverse)
+library(dplyr)
+library(caret)
+library(ROCR)
+library(MLmetrics)
+library(mltools)
+library(rpart.plot)
+```
+Reading in Data
+```{r}
+# Read csv, converting empty strings to NAs
+states <- read.csv("data/states_all_2_training.csv", na.strings=c('',NA))
+states_dropped <- states %>% drop_na(GRADES_ALL_G) # dropping NAs
+str(states)
+eduID <- states[, c(1)]
+View(eduID)
+states <- states[, -c(1)]
+View(states)
+# Decreasing factor level for states to 6 from 52 by regions
+# Specified by list here: https://www.infoplease.com/us/states/regions-of-the-us
+states$STATE <- fct_collapse(states$STATE,
+                                      NewEngland = c("CONNECTICUT", "MAINE", "MASSACHUSETTS", "NEW_HAMPSHIRE", "RHODE_ISLAND", "VERMONT"),
+                                      MiddleAtlantic = c("DELAWARE", "MARYLAND", "NEW_JERSEY", "NEW_YORK", "PENNSYLVANIA"), 
+                                      South = c("ALABAMA", "ARKANSAS", "FLORIDA", "GEORGIA", "KENTUCKY", "LOUISIANA", "MISSISSIPPI", "MISSOURI", "NORTH_CAROLINA", "SOUTH_CAROLINA", "TENNESSEE", "VIRGINIA", "WEST_VIRGINIA"),
+                                      Midwest = c("ILLINOIS", "INDIANA", "IOWA", "KANSAS", "MICHIGAN", "MINNESOTA", "NEBRASKA", "NORTH_DAKOTA", "OHIO", "SOUTH_DAKOTA", "WISCONSIN"), 
+                                      Southwest = c("ARIZONA", "NEW_MEXICO", "OKLAHOMA", "TEXAS"), 
+                                      West = c("ALASKA", "CALIFORNIA", "HAWAII", "IDAHO", "MONTANA", "NEVADA", "OREGON", "UTAH", "WASHINGTON", "WYOMING", "COLORADO"),
+                                      Other = c("DISTRICT_OF_COLUMBIA", "DODEA", "NATIONAL")
+                                      )
+table(states$STATE)
+table(states$YEAR)
+# Working with missing data
+sum(is.na(states))
+sum(!complete.cases(states)) 
+mice::md.pattern(states)
+unique(states$STATE)
+remove_cols <- c(24,22,19,18,17,16,14,13,3)
+states1 <- states[,-remove_cols]
+mice::md.pattern(states1)
+states2 <- states1[complete.cases(states1),]
+```
+
+#### Creating Model with Complete Cases only
+Data Trimming and Partitioning
+```{r}
+# 80/20 Train, Tune Split on target of AVG_READING_4_SCORE
+tune_train_index <- createDataPartition(states2$AVG_READING_4_SCORE, p=.8,
+                                   list=F,
+                                   times=1)
+train <- states2[tune_train_index,]
+dim(train)
+tune <- states2[-tune_train_index,]
+dim(tune)
+fitControl <- trainControl(method = "repeatedcv",
+                          number = 10,
+                          repeats = 5) 
+features <- train[,-15]
+target <- train$AVG_READING_4_SCORE
+set.seed(1999)
+# Initial Model
+myDT <- train(x=features,
+                y=target,
+                method="rpart2",
+                trControl=fitControl,
+                metric="RMSE")
+```
+```{r}
+# Evaluation of Initial Model + Tuning Grid
+plot(myDT)
+varImp(myDT)
+df_pred <- predict(myDT$finalModel, tune)
+df_pred
+postResample(df_pred, tune$AVG_READING_4_SCORE)
+range(tune$AVG_READING_4_SCORE)
+3.75/30
+tree.grid <- expand.grid(maxdepth=c(3:20))
+```
+Building Model
+```{r}
+# Rpart tree with tuning
+myDT1 <- train(x=features,
+                y=target,
+                method="rpart2",
+                trControl=fitControl,
+                tuneGrid=tree.grid,
+                metric="RMSE")
+```
+Final Evaluation
+```{r}
+# Plot evaluation of model
+plot(myDT1)
+varImp(myDT1)
+df_pred1 <- predict(myDT1$finalModel, tune)
+postResample(df_pred1, tune$AVG_READING_4_SCORE)
+```
+
+  Our team's final model produced an RMSE of ~3.1 for the test set on Kaggle (the 2015 year for reading scores), with a Rsquared value of ~0.85; I will note here that the XGB model tested below had a sub 2 RMSE and ~0.98 Rsquared value on the local test set but ultimately did worse than the rpart model for final evaluation. The normalized RMSE came out to under 10% (under 0.10) which was a model performance our group was satisfied with for the purposes of this work; the model does have strong predictive value, but does leave room for improvement. The most notable change that could be made would be more extensive feature engineering as our model was built on ~350 data points of more than 1500 as the most direct approach to getting a working model after dropping unnecessary columns was to drop all rows with NAs. If we were able to combine a larger, more carefully engineered data set - potentially using techniques like MICE to populate NAs - we suspect we could achieve notably higher test performance. In short, however, our model produced reasonable results, despite the concerns and limitations present in a very noisy dataset with numerous missing entries.
+  To the point of main concern, our team's primary struggle with this was simply figuring out the best way to work with such unwieldy initial data, especially given time and computational constraints. Once we had any form of usable training data we were very comfortable exploring model engineering. Overall, this Kaggle competition served as a good learning experience working with real world data in an undirected manner.
+
+#### *Everything Below is other code use in testing but not the final evaluation*
+
+Training on Full dataset
+```{r}
+full.features <- states2[,-15]
+full.target <- states2$AVG_READING_4_SCORE
+full.myDT <- train(x=full.features,
+                y=full.target,
+                method="rpart2",
+                trControl=fitControl,
+                tuneGrid=tree.grid,
+                metric="RMSE")
+```
+Test Feature Engineering and Data Cleaning
+```{r}
+states[states==''] <- NA
+states2 <- states %>% drop_na(GRADES_ALL_G)
+summary(states2)
+```
+```{r}
+states3 <- states2 %>% drop_na(AVG_READING_4_SCORE)
+summary(states3)
+nrow(states3)
+```
+```{r}
+# Split your data into test, tune, and train. (80/10/10)
+states <- states[,-c(1,3)]
+xx <- states[complete.cases(states),]
+set.seed(42)
+part_index_1 <- caret::createDataPartition(xx$AVG_READING_4_SCORE,
+                                           times=1,
+                                           p = 0.70,
+                                           groups=1,
+                                           list=FALSE)
+
+train <- xx[part_index_1, ]
+tune_and_test <- xx[-part_index_1, ]
+train
+
+tune_and_test_index <- createDataPartition(tune_and_test$AVG_READING_4_SCORE,
+                                           p = .5,
+                                           list = FALSE,
+                                           times = 1)
+
+tune <- tune_and_test[tune_and_test_index, ]
+test <- tune_and_test[-tune_and_test_index, ]
+
+
+dim(train)
+dim(test)
+dim(tune)
+```
+Initial Training Grid
+```{r}
+grid_default <- expand.grid(
+    nrounds = 100,
+    max_depth = 6,
+    eta = 0.3,
+    gamma = 0,
+    colsample_bytree = 1,
+    min_child_weight = 1,
+    subsample = 1
+)
+
+train_control <- caret::trainControl(
+    method = "none",
+    verboseIter = FALSE, # no training log
+    allowParallel = TRUE # FALSE for reproducible results
+)
+
+features <- train[,-21] # drop target variable
+target <- tibble(score=train$AVG_READING_4_SCORE)
+```
+```{r}
+# Library for parallelization to speed up xgb training
+library(doParallel)
+```
+XGB Base Model Creation
+```{r}
+set.seed(42)
+cl = makePSOCKcluster(4)
+registerDoParallel(cl)
+xgb_base <- caret::train(
+    x = features,
+    y = target$score,
+    trControl = train_control,
+    tuneGrid = grid_default,
+    method = "xgbTree",
+    verbose = TRUE
+)
+stopCluster(cl)
+```
+Tuning Parameters For Initial Round of XGB Tuning
+```{r}
+tune_grid <- expand.grid(
+  nrounds = seq(from = 200, to = 1000, by = 50),
+  eta = c(0.025, 0.05, 0.1, 0.3),
+  max_depth = c(2, 3, 4, 5, 6),
+  gamma = 0,
+  colsample_bytree = 1,
+  min_child_weight = 1,
+  subsample = 1
+)
+
+tune_control <- caret::trainControl(
+  method = "cv", # cross-validation
+  number = 3, # with n folds
+  verboseIter = FALSE, # no training log
+  allowParallel = TRUE # FALSE for reproducible results
+)
+```
+Base XGB Model for Tuning
+```{r}
+set.seed(42)
+cl = makePSOCKcluster(4)
+registerDoParallel(cl)
+xgb_tune <- caret::train(
+  x = features,
+  y = target$score,
+  trControl = tune_control,
+  tuneGrid = tune_grid,
+  method = "xgbTree",
+  verbose = TRUE
+)
+stopCluster(cl)
+```
+XGB Tuning + Model Rebuilding
+```{r}
+# Secondary tune grid for training with more specified hyper-parameters
+tune_grid2 <- expand.grid(
+  nrounds = seq(from = 50, to = 1000, by = 50),
+  eta = xgb_tune$bestTune$eta,
+  max_depth = ifelse(xgb_tune$bestTune$max_depth == 2,
+                     c(xgb_tune$bestTune$max_depth:4),
+                     xgb_tune$bestTune$max_depth - 1:xgb_tune$bestTune$max_depth + 1),
+  gamma = 0,
+  colsample_bytree = 1,
+  min_child_weight = c(1, 2, 3),
+  subsample = 1
+)
+
+# Building tuned XGB model based on tuned parameters from xgb_tune1
+set.seed(42)
+cl = makePSOCKcluster(4)
+registerDoParallel(cl)
+xgb_tune2 <- caret::train(
+  x = features,
+  y = target$score,
+  trControl = tune_control,
+  tuneGrid = tune_grid2,
+  method = "xgbTree",
+  verbose = TRUE
+)
+stopCluster(cl)
+```
+XGB Tuned Version Predicting on Tune
+```{r}
+score_pred_tune_r = predict(xgb_tune2, tune)
+postResample(pred = score_pred_tune_r, obs = tune$AVG_READING_4_SCORE)
+```
+XGB Tuned Version Predicting on Test
+```{r}
+score_pred_tune_r = predict(xgb_tune2, test)
+postResample(pred = score_pred_tune_r, obs = test$AVG_READING_4_SCORE)
+```
+
+```{r}
+# Reading in test data
+test_df <- read.csv("./data/test_set_public.csv")
+ID <- test_df[,1]
+test_df <- test_df[,-1]
+
+# Running factor collapse on test data
+test_df$STATE <- fct_collapse(test_df$STATE,
+                             NewEngland = c("CONNECTICUT", "MAINE", "MASSACHUSETTS", "NEW_HAMPSHIRE", "RHODE_ISLAND", "VERMONT"),
+                             MiddleAtlantic = c("DELAWARE", "MARYLAND", "NEW_JERSEY", "NEW_YORK", "PENNSYLVANIA"),
+                             South = c("ALABAMA", "ARKANSAS", "FLORIDA", "GEORGIA", "KENTUCKY", "LOUISIANA", "MISSISSIPPI", "MISSOURI", "NORTH_CAROLINA", "SOUTH_CAROLINA", "TENNESSEE", "VIRGINIA", "WEST_VIRGINIA"),
+                             Midwest = c("ILLINOIS", "INDIANA", "IOWA", "KANSAS", "MICHIGAN", "MINNESOTA", "NEBRASKA", "NORTH_DAKOTA", "OHIO", "SOUTH_DAKOTA", "WISCONSIN"),
+                             Southwest = c("ARIZONA", "NEW_MEXICO", "OKLAHOMA", "TEXAS"),
+                             West = c("ALASKA", "CALIFORNIA", "HAWAII", "IDAHO", "MONTANA", "NEVADA", "OREGON", "UTAH", "WASHINGTON", "WYOMING", "COLORADO"),
+                             Other = c("DISTRICT_OF_COLUMBIA", "DODEA", "NATIONAL")
+)
+
+# Generating predictions
+test_df <- test_df[,-1]
+test_pred <- predict(xgb_tune2, test_df)
+predictions <- data.frame(ID)
+predictions$PREDICTED <- test_pred
+
+write.csv(predictions, 'predictions3.csv', row.names = F)
+```
+
+
