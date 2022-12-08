@@ -1,0 +1,189 @@
+---
+title: "Final_Project_Drake_Random_Forest"
+author: "Alex Williams"
+date: "2022-12-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+#install.packages("plyr")
+library(plyr)
+library(plotly)
+#install.packages("randomForest")
+library(randomForest)
+library(rio)
+library(caret)
+library(ROCR)
+library(tidyverse)
+library(rpart)
+#install.packages("pscyh")
+library(psych)
+library(pROC)
+#install.packages("rpart.plot")
+library(rpart.plot)
+#install.packages("rattle")
+library(rattle)
+library(corrplot)
+```
+
+
+```{r}
+setwd("C:/Users/Student/OneDrive/DS-3001/")
+
+df <- read.csv("data/SpotifyFeatures.csv")
+
+table(df$genre)
+df2 <-unique(df)
+df3 <- df2[df2$artist_name == 'Drake',]
+final_rap <- df3[-c(1, 2, 3, 4)]
+
+```
+
+
+Finish any other data prep (one-hot encode, reduce factor levels)
+```{r}
+
+factor_cols <- c(7, 10, 13)
+final_rap[,factor_cols] <- lapply(final_rap[,factor_cols], as_factor)
+final_rap$duration_ms <- as.numeric(final_rap$duration_ms)
+final_rap$popularity <- as.numeric(final_rap$popularity)
+
+correlationMatrix <- cor(final_rap[, sapply(final_rap, is.numeric)], use = "complete.obs", method="pearson")
+corrplot(correlationMatrix, method = 'number')
+
+```
+
+Create test and training sets 
+```{r}
+
+sample_rows = 1:nrow(final_rap)
+
+set.seed(1984) 
+test_rows = sample(sample_rows,
+                   dim(final_rap)[1]*.10,
+                   replace = FALSE)
+
+
+rap_train = final_rap[-test_rows,]
+rap_test = final_rap[test_rows,]
+
+```
+
+Calculate the initial mtry level 
+```{r}
+
+dim(rap_train)
+
+mytry_tune <- function(x){
+  xx <- dim(x)[2]-1
+  sqrt(xx)
+}
+
+
+mytry_tune(final_rap)
+
+```
+
+Run the initial RF model with 1000 trees 
+```{r}
+
+rap_RF = randomForest(as.numeric(popularity)~.,      
+                            rap_train,
+                            ntree = 1000, 
+                            mtry = 4,
+                            replace = TRUE,
+                            sampsize = 100,
+                            nodesize = 5,
+                            importance = TRUE,
+                            proximity = FALSE,
+                            norm.votes = TRUE,
+                            do.trace = TRUE,
+                            keep.forest = TRUE,
+                            keep.inbag = TRUE)
+
+#==================================================================================
+
+# Calculate the RMSE
+sqrt(rap_RF$mse[length(rap_RF$mse)])
+
+View(as.data.frame(rap_RF$predicted))
+
+```
+
+Take a look at the variable importance measures
+```{r}
+
+View(as.data.frame(varImp(rap_RF, type = 2, scale = TRUE)))
+
+```
+
+Using the training data sets to tune the model in consideration of the number of trees, the number of variables to sample and the sample size that optimize the model output. 
+```{r}
+set.seed(1984)	
+rap_RF_2 = randomForest(as.numeric(popularity)~.,
+                              rap_train,
+                              ntree = 1000,
+                              mtry = 5,
+                              replace = TRUE,
+                              sampsize = 400,
+                              nodesize = 5,
+                              importance = TRUE,
+                              proximity = FALSE,
+                              norm.votes = TRUE,
+                              do.trace = TRUE,
+                              keep.forest = TRUE,
+                              keep.inbag = TRUE) 
+
+
+sqrt(rap_RF$mse[length(rap_RF$mse)])
+sqrt(rap_RF_2$mse[length(rap_RF_2$mse)])
+
+View(as.data.frame(rap_RF_2$predicted))
+
+varImpPlot(rap_RF_2,
+           sort = TRUE,
+           n.var = 10,
+           main = "Important Factors for Identifying Song Popularity",
+           bg = "white",
+           color = "blue",
+           lcolor = "orange")
+
+
+
+```
+
+Once a final model has been selected (hyper-parameters of the model are set), evaluate the model using the test dataset. 
+```{r}
+
+rap_test_RF = randomForest(as.numeric(popularity)~.,
+                              rap_test,
+                              ntree = 1000,
+                              mtry = 5,
+                              replace = TRUE,
+                              sampsize = 40,
+                              nodesize = 5,
+                              importance = TRUE,
+                              proximity = FALSE,
+                              norm.votes = TRUE,
+                              do.trace = TRUE,
+                              keep.forest = TRUE,
+                              keep.inbag = TRUE)  
+
+
+rap_test_RF
+
+sqrt(rap_test_RF$mse[length(rap_test_RF$mse)])
+
+View(as.data.frame(rap_test_RF$predicted))
+
+varImpPlot(rap_test_RF,
+           sort = TRUE,
+           n.var = 10,
+           main = "Important Factors for Identifying Song Popularity",
+           bg = "white",
+           color = "blue",
+           lcolor = "orange")
+
+```
