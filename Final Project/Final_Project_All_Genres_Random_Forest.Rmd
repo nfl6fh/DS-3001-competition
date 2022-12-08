@@ -1,0 +1,249 @@
+---
+title: "Final_Project_Pop_RF"
+author: "Alex Williams"
+date: "2022-12-07"
+output: html_document
+---
+
+---
+title: "Random_Forest_Lab"
+author: "Alexander Williams"
+date: "11/10/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+#install.packages("plyr")
+library(plyr)
+library(plotly)
+#install.packages("randomForest")
+library(randomForest)
+library(rio)
+library(caret)
+library(ROCR)
+library(tidyverse)
+library(rpart)
+#install.packages("pscyh")
+library(psych)
+library(pROC)
+#install.packages("rpart.plot")
+library(rpart.plot)
+#install.packages("rattle")
+library(rattle)
+library(corrplot)
+```
+
+
+```{r}
+setwd("C:/Users/Student/OneDrive/DS-3001/")
+
+df <- read.csv("data/SpotifyFeatures.csv")
+
+table(df$genre)
+df2 <-unique(df)
+#art_freq <- as.data.frame(table(df2$artist_name))
+#df3 <- df2[df2$artist_name == 'Drake',]
+#final_pop <- df3[-c(1, 2, 3, 4)]
+final_pop <- df2[-c(1, 2, 3, 4)]
+
+```
+
+
+Finish any other data prep (one-hot encode, reduce factor levels)
+```{r}
+
+factor_cols <- c(7, 10, 13)
+final_pop[,factor_cols] <- lapply(final_pop[,factor_cols], as_factor)
+final_pop$duration_ms <- as.numeric(final_pop$duration_ms)
+final_pop$popularity <- as.numeric(final_pop$popularity)
+
+correlationMatrix <- cor(final_pop[, sapply(final_pop, is.numeric)], use = "complete.obs", method="pearson")
+corrplot(correlationMatrix, method = 'number')
+
+```
+
+Create test and training sets 
+```{r}
+
+sample_rows = 1:nrow(final_pop)
+
+# sample() is a randomized function, use set.seed() to make your results reproducible.
+set.seed(1984) #sample(x, size, replace = FALSE, prob = NULL)
+test_rows = sample(sample_rows,
+                   dim(final_pop)[1]*.10, #start with 10% of our dataset, could do 20%
+                   # but random forest does require more training data because of the 
+                   # sampling so 90% might be a better approach with this small of a dataset
+                   replace = FALSE)# We don't want duplicate samples
+
+
+pop_train = final_pop[-test_rows,]
+pop_test = final_pop[test_rows,]
+
+```
+
+Calculate the initial mtry level 
+```{r}
+
+dim(pop_train)
+
+mytry_tune <- function(x){
+  xx <- dim(x)[2]-1
+  sqrt(xx)
+}
+
+
+mytry_tune(final_pop)
+
+```
+
+Run the initial RF model with 1000 trees 
+```{r}
+
+pop_RF = randomForest(as.numeric(popularity)~.,          #<- Formula: response variable ~ predictors.
+                            #   The period means 'use all other variables in the data'.
+                            pop_train,     #<- A data frame with the variables to be used.
+                            #y = NULL,           #<- A response vector. This is unnecessary because we're specifying a response formula.
+                            #subset = NULL,      #<- This is unnecessary because we're using all the rows in the training data set.
+                            #xtest = NULL,       #<- This is already defined in the formula by the ".".
+                            #ytest = NULL,       #<- This is already defined in the formula by "PREGNANT".
+                            ntree = 1000,        #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
+                            mtry = 4,            #<- Number of variables randomly sampled as candidates at each split. Default number for classification is sqrt(# of variables). Default number for regression is (# of variables / 3).
+                            replace = TRUE,      #<- Should sampled data points be replaced.
+                            #classwt = NULL,     #<- Priors of the classes. Use this if you want to specify what proportion of the data SHOULD be in each class. This is relevant if your sample data is not completely representative of the actual population 
+                            #strata = NULL,      #<- Not necessary for our purpose here.
+                            sampsize = 100,      #<- Size of sample to draw each time.
+                            nodesize = 5,        #<- Minimum numbers of data points in terminal nodes.
+                            #maxnodes = NULL,    #<- Limits the number of maximum splits. 
+                            importance = TRUE,   #<- Should importance of predictors be assessed?
+                            #localImp = FALSE,   #<- Should casewise importance measure be computed? (Setting this to TRUE will override importance.)
+                            proximity = FALSE,    #<- Should a proximity measure between rows be calculated?
+                            norm.votes = TRUE,   #<- If TRUE (default), the final result of votes are expressed as fractions. If FALSE, raw vote counts are returned (useful for combining results from different runs).
+                            do.trace = TRUE,     #<- If set to TRUE, give a more verbose output as randomForest is run.
+                            keep.forest = TRUE,  #<- If set to FALSE, the forest will not be retained in the output object. If xtest is given, defaults to FALSE.
+                            keep.inbag = TRUE)   #<- Should an n by ntree matrix be returned that keeps track of which samples are in-bag in which trees? 
+
+#==================================================================================
+
+####  Random forest output ####
+
+# Calculate the RMSE
+sqrt(pop_RF$mse[length(pop_RF$mse)])
+
+
+# The "predicted" argument contains a vector of predictions for each 
+# data point.
+View(as.data.frame(pop_RF$predicted))
+
+```
+
+Take a look at the variable importance measures
+```{r}
+
+# The "importance" argument provides a table that includes the importance
+# of each variable to the accuracy of the classification.
+View(as.data.frame(varImp(pop_RF, type = 2, scale = TRUE))) #type 1 is error on oob, 
+                                                                      # type 2 is total decrease
+# in node impurity as measured by the Gini index, look at the differences, stop by wine for example. 
+                                                        # scale divides the measures by 
+                                                        # their standard errors
+
+```
+
+Using the training data sets to tune the model in consideration of the number of trees, the number of variables to sample and the sample size that optimize the model output. 
+```{r}
+#### Optimize the random forest model ####
+
+# Let's just say we want to do the best we can to label pregnant customers as pregnant
+# later we can certainly adjust the threshold but want to tune to optimize the models ability 
+# to identify the positive target class. 
+
+set.seed(1984)	
+pop_RF_2 = randomForest(as.numeric(popularity)~.,          #<- formula, response variable ~ predictors.
+                              #   the period means 'use all other variables in the data'.
+                              pop_train,     #<- A data frame with variables to be used.
+                              #y = NULL,           #<- A response vector. This is unnecessary because we're specifying a response formula.
+                              #subset = NULL,      #<- This is unneccessary because we're using all the rows in the training data set.
+                              #xtest = NULL,       #<- This is already defined in the formula by the ".".
+                              #ytest = NULL,       #<- This is already defined in the formula by "PREGNANT".
+                              ntree = 1000,          #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
+                              mtry = 5,            #<- Number of variables randomly sampled as candidates at each split. Default number for classification is sqrt(# of variables). Default number for regression is (# of variables / 3).
+                              replace = TRUE,      #<- Should sampled data points be replaced.
+                              #classwt = NULL,     #<- Priors of the classes. We will work through this later. 
+                              #strata = NULL,      #<- Not necessary for our purpose here.
+                              sampsize = 10000,      #<- Size of sample to draw each time.
+                              nodesize = 5,        #<- Minimum numbers of data points in terminal nodes.
+                              #maxnodes = NULL,    #<- The "nodesize" argument limits the number of maximum splits. 
+                              importance = TRUE,   #<- Should importance predictors be assessed?
+                              #localImp = FALSE,   #<- Should casewise importance measure be computed? (Setting this to TRUE will override importance.)
+                              proximity = FALSE,    #<- Should a proximity measure between rows be calculated?
+                              norm.votes = TRUE,   #<- If TRUE (default), the final result of votes are expressed as fractions. If FALSE, raw vote counts are returned (useful for combining results from different runs).
+                              do.trace = TRUE,     #<- If set to TRUE, give a more verbose output as randomForest is run.
+                              keep.forest = TRUE,  #<- If set to FALSE, the forest will not be retained in the output object. If xtest is given, defaults to FALSE.
+                              keep.inbag = TRUE) 
+
+
+sqrt(pop_RF$mse[length(pop_RF$mse)])
+sqrt(pop_RF_2$mse[length(pop_RF_2$mse)])
+
+View(as.data.frame(pop_RF_2$predicted))
+
+varImpPlot(pop_RF_2,     #<- the randomForest model to use
+           sort = TRUE,        #<- whether to sort variables by decreasing order of importance
+           n.var = 10,        #<- number of variables to display
+           main = "Important Factors for Identifying Song Popularity",
+           #cex = 2,           #<- size of characters or symbols
+           bg = "white",       #<- background color for the plot
+           color = "blue",     #<- color to use for the points and labels
+           lcolor = "orange")  #<- color to use for the horizontal lines
+
+
+
+```
+
+Once a final model has been selected (hyper-parameters of the model are set), evaluate the model using the test dataset. 
+```{r}
+
+pop_test_RF = randomForest(as.numeric(popularity)~.,          #<- formula, response variable ~ predictors.
+                              #   the period means 'use all other variables in the data'.
+                              pop_test,     #<- A data frame with variables to be used.
+                              #y = NULL,           #<- A response vector. This is unnecessary because we're specifying a response formula.
+                              #subset = NULL,      #<- This is unneccessary because we're using all the rows in the training data set.
+                              #xtest = NULL,       #<- This is already defined in the formula by the ".".
+                              #ytest = NULL,       #<- This is already defined in the formula by "PREGNANT".
+                              ntree = 1000,          #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
+                              mtry = 5,            #<- Number of variables randomly sampled as candidates at each split. Default number for classification is sqrt(# of variables). Default number for regression is (# of variables / 3).
+                              replace = TRUE,      #<- Should sampled data points be replaced.
+                              #classwt = NULL,     #<- Priors of the classes. We will work through this later. 
+                              #strata = NULL,      #<- Not necessary for our purpose here.
+                              sampsize = 10000,      #<- Size of sample to draw each time.
+                              nodesize = 5,        #<- Minimum numbers of data points in terminal nodes.
+                              #maxnodes = NULL,    #<- The "nodesize" argument limits the number of maximum splits. 
+                              importance = TRUE,   #<- Should importance predictors be assessed?
+                              #localImp = FALSE,   #<- Should casewise importance measure be computed? (Setting this to TRUE will override importance.)
+                              proximity = FALSE,    #<- Should a proximity measure between rows be calculated?
+                              norm.votes = TRUE,   #<- If TRUE (default), the final result of votes are expressed as fractions. If FALSE, raw vote counts are returned (useful for combining results from different runs).
+                              do.trace = TRUE,     #<- If set to TRUE, give a more verbose output as randomForest is run.
+                              keep.forest = TRUE,  #<- If set to FALSE, the forest will not be retained in the output object. If xtest is given, defaults to FALSE.
+                              keep.inbag = TRUE)  
+
+
+pop_test_RF
+
+sqrt(pop_test_RF$mse[length(pop_test_RF$mse)])
+
+View(as.data.frame(pop_test_RF$predicted))
+
+varImpPlot(pop_test_RF,     #<- the randomForest model to use
+           sort = TRUE,        #<- whether to sort variables by decreasing order of importance
+           n.var = 10,        #<- number of variables to display
+           main = "Important Factors for Identifying Song Popularity",
+           #cex = 2,           #<- size of characters or symbols
+           bg = "white",       #<- background color for the plot
+           color = "blue",     #<- color to use for the points and labels
+           lcolor = "orange")  #<- color to use for the horizontal lines
+
+```

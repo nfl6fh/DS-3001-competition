@@ -1,0 +1,178 @@
+---
+title: "Final Project - Rap"
+author: "Alex Williams"
+date: "2022-12-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(caret)
+library(ROCR)
+library(MLmetrics)
+library(mltools)
+library(rpart.plot)
+library(dplyr)
+library(corrplot)
+```
+
+```{r}
+
+setwd("C:/Users/Student/OneDrive/DS-3001/")
+
+df <- read.csv("data/SpotifyFeatures.csv")
+
+table(df$genre)
+df2 <-unique(df)
+#df3 <- df2[df2$genre == 'Rap',]
+final_pop <- df2[-c(1, 2, 3, 4)]
+
+```
+
+```{r}
+#2 Ensure all the variables are classified correctly including the target variable and collapse factors if still needed. 
+factor_cols <- c(7, 10, 13)
+final_pop[,factor_cols] <- lapply(final_pop[,factor_cols], as_factor)
+final_pop$duration_ms <- as.numeric(final_pop$duration_ms)
+final_pop$popularity <- as.numeric(final_pop$popularity)
+
+```
+
+```{r}
+#4 Split your data into test, tune, and train. (80/10/10)
+part_index_1 <- createDataPartition(final_pop$popularity,
+                                           times=1,
+                                           p = 0.80,
+                                           list=FALSE)
+
+train <- final_pop[part_index_1, ]
+tune_and_test <- final_pop[-part_index_1, ]
+
+tune_and_test_index <- createDataPartition(tune_and_test$popularity,  
+                                           p = .5,
+                                           list = FALSE,
+                                           times = 1)
+
+tune <- tune_and_test[tune_and_test_index, ]  
+test <- tune_and_test[-tune_and_test_index, ]  
+
+```
+
+```{r}
+#5 Build your model using the training data, rpart2, and repeated cross validation as reviewed in class with the caret package.
+features <- train[,-1] 
+
+correlationMatrix <- cor(features[, sapply(features, is.numeric)], use = "complete.obs", method="pearson")
+corrplot(correlationMatrix, method = 'number')
+
+target <- train$popularity
+
+fitControl <- trainControl(method = "repeatedcv",
+                          number = 10,
+                          repeats = 5) 
+
+tree.grid <- expand.grid(maxdepth=c(3:20))
+
+set.seed(1999)
+pop_mdl_r <- train(x=features,
+                y=target,
+                method="rpart2",
+                trControl=fitControl,
+                metric="RMSE")
+pop_mdl_r
+
+pop_mdl_1_r <- train(x=features,
+                y=target,
+                method="rpart2",
+                trControl=fitControl,
+                tuneGrid=tree.grid,
+                metric="RMSE")
+
+pop_mdl_1_r
+
+?train()
+```
+
+```{r}
+#6 View the results, comment on how the model performed and which variables appear to be contributing the most (variable importance)  
+
+plot(pop_mdl_1_r)
+plot(pop_mdl_r)
+varImp(pop_mdl_1_r)
+varImp(pop_mdl_r)
+
+pop_mdl_r$results
+
+
+```
+
+```{r}
+#7 Plot the output of the model to see the tree visually, using rpart.plot, is there anything you notice that might be a concern?  
+
+rpart.plot(pop_mdl_r$finalModel, type=5,extra=101)
+rpart.plot(pop_mdl_1_r$finalModel, type=5,extra=101)
+```
+
+```{r}
+#8 Use the tune set and the predict function with your model to make predicts for the target variable.
+
+pop_pred_tune_r = predict(pop_mdl_1_r,tune)
+
+View(as_tibble(pop_pred_tune_r))
+
+postResample(pred = pop_pred_tune_r, obs = tune$popularity)
+
+#We want this number, RSME, to be low relative to the range of the target variable and Rsquared to be close to 1. 
+range(tune$popularity)
+
+varImp(pop_mdl_1_r)
+
+pred_tune_reg <- predict(pop_mdl_1_r,tune)
+
+
+
+```
+
+```{r}
+#9 Use the postResample function to get your evaluation metrics. Also calculate NRMSE using the range (max-min) for the target variable. Explain what all these measures mean in terms of your models predictive power.  
+
+postResample(pred = pred_tune_reg,obs = tune$popularity)
+
+99 - 1
+11.11557 / 98
+
+str(target)
+
+```
+
+```{r}
+#10 Once you are confident that your model is not improving, via changes implemented on the training set and evaluated on the the tune set, predict with the test set and report final evaluation of the model. Discuss the output in comparison with the previous evaluations.  
+
+linear <- lm(popularity~., final_pop)
+library(MASS)
+linear_aic <- stepAIC(linear, direction='both', trace=F)
+detach('package:MASS')
+summary(linear_aic)
+
+tree.grid_5 <- expand.grid(maxdepth=c(5))
+
+pop_mdl_1_5 <- train(x=features,
+                y=target,
+                method="rpart2",#type of model uses maxdepth to select a model
+                trControl=fitControl,#previously created
+                tuneGrid=tree.grid_5,#expanded grid
+                metric="RMSE")
+
+rpart.plot(pop_mdl_1_5$finalModel, type = 5, extra=101)
+
+pred_test_reg <- predict(pop_mdl_1_5,test)
+
+head(pred_test_reg)
+
+postResample(pred = pred_test_reg,obs = test$popularity)
+
+```
