@@ -156,34 +156,40 @@ varImpPlot(rap_RF_2,
 
 Once a final model has been selected (hyper-parameters of the model are set), evaluate the model using the test dataset. 
 ```{r}
+rap_test_predict = predict(rap_RF_2,      
+                            rap_test,      
+                            type = "response",   
+                            predict.all = TRUE)
 
-rap_test_RF = randomForest(as.numeric(popularity)~.,
-                              rap_test,
-                              ntree = 1000,
-                              mtry = 5,
-                              replace = TRUE,
-                              sampsize = 40,
-                              nodesize = 5,
-                              importance = TRUE,
-                              proximity = FALSE,
-                              norm.votes = TRUE,
-                              do.trace = TRUE,
-                              keep.forest = TRUE,
-                              keep.inbag = TRUE)  
+rmse(rap_test$popularity, rap_test_predict$aggregate)
 
-
-rap_test_RF
-
-sqrt(rap_test_RF$mse[length(rap_test_RF$mse)])
-
-View(as.data.frame(rap_test_RF$predicted))
-
-varImpPlot(rap_test_RF,
-           sort = TRUE,
-           n.var = 10,
-           main = "Important Factors for Identifying Song Popularity",
-           bg = "white",
-           color = "blue",
-           lcolor = "orange")
+# rap_test_RF = randomForest(as.numeric(popularity)~.,
+#                               rap_test,
+#                               ntree = 1000,
+#                               mtry = 5,
+#                               replace = TRUE,
+#                               sampsize = 40,
+#                               nodesize = 5,
+#                               importance = TRUE,
+#                               proximity = FALSE,
+#                               norm.votes = TRUE,
+#                               do.trace = TRUE,
+#                               keep.forest = TRUE,
+#                               keep.inbag = TRUE)  
+# 
+# 
+# rap_test_RF
+# 
+# sqrt(rap_test_RF$mse[length(rap_test_RF$mse)])
+# 
+# View(as.data.frame(rap_test_RF$predicted))
+# 
+# varImpPlot(rap_test_RF,
+#            sort = TRUE,
+#            n.var = 10,
+#            main = "Important Factors for Identifying Song Popularity",
+#            bg = "white",
+#            color = "blue",
+#            lcolor = "orange")
 
 ```
