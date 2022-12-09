@@ -52,7 +52,8 @@ df2 <-unique(df)
 #df3 <- df2[df2$artist_name == 'Drake',]
 #final_pop <- df3[-c(1, 2, 3, 4)]
 final_pop <- df2[-c(1, 2, 3, 4)]
-
+final_pop = unique(final_pop)
+final_pop = final_pop[sample(1:nrow(final_pop),19000),]
 ```
 
 
@@ -155,7 +156,7 @@ pop_RF
 
 # The "predicted" argument contains a vector of predictions for each 
 # data point.
-as.data.frame(pop_RF$predicted)
+view(as.data.frame(pop_RF$predicted))
 
 ```
 
@@ -169,6 +170,22 @@ as.data.frame(varImp(pop_RF, type = 2, scale = TRUE)) #type 1 is error on oob,
 # in node impurity as measured by the Gini index, look at the differences, stop by wine for example. 
                                                         # scale divides the measures by 
                                                         # their standard errors
+
+```
+
+Use tuneRF to find optimal mtry value
+```{r}
+pop_RF_mtry = tuneRF(pop_train[ ,2:14],  
+                           pop_train$popularity,   
+                           mtryStart = 4,                        
+                           ntreeTry = 100,                       
+                           stepFactor = 2,                       
+                           improve = 0.05,                       
+                           trace = TRUE,                         
+                           plot = TRUE,                          
+                           doBest = FALSE)                       
+
+pop_RF_mtry
 
 ```
 
@@ -188,12 +205,12 @@ pop_RF_2 = randomForest(as.numeric(popularity)~.,          #<- formula, response
                               #subset = NULL,      #<- This is unneccessary because we're using all the rows in the training data set.
                               #xtest = NULL,       #<- This is already defined in the formula by the ".".
                               #ytest = NULL,       #<- This is already defined in the formula by "PREGNANT".
-                              ntree = 1000,          #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
-                              mtry = 5,            #<- Number of variables randomly sampled as candidates at each split. Default number for classification is sqrt(# of variables). Default number for regression is (# of variables / 3).
+                              ntree = 200,          #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
+                              mtry = 2,            #<- Number of variables randomly sampled as candidates at each split. Default number for classification is sqrt(# of variables). Default number for regression is (# of variables / 3).
                               replace = TRUE,      #<- Should sampled data points be replaced.
                               #classwt = NULL,     #<- Priors of the classes. We will work through this later. 
                               #strata = NULL,      #<- Not necessary for our purpose here.
-                              sampsize = 10000,      #<- Size of sample to draw each time.
+                              sampsize = 2000,      #<- Size of sample to draw each time.
                               nodesize = 5,        #<- Minimum numbers of data points in terminal nodes.
                               #maxnodes = NULL,    #<- The "nodesize" argument limits the number of maximum splits. 
                               importance = TRUE,   #<- Should importance predictors be assessed?
@@ -210,7 +227,7 @@ paste("pop_RF_2 RMSE:",sqrt(pop_RF_2$mse[length(pop_RF_2$mse)]), sep=" ")
 paste("pop_RF_2 NRMSE:",sqrt(pop_RF_2$mse[length(pop_RF_2$mse)])/(max(pop_train$popularity)- min(pop_train$popularity)), sep=" ")
 pop_RF_2
 
-as.data.frame(pop_RF_2$predicted)
+view(as.data.frame(pop_RF_2$predicted))
 
 varImpPlot(pop_RF_2,     #<- the randomForest model to use
            sort = TRUE,        #<- whether to sort variables by decreasing order of importance
