@@ -37,12 +37,13 @@ library(rpart.plot)
 #install.packages("rattle")
 library(rattle)
 library(corrplot)
+library(ggplot2)
 ```
 
 
 ```{r}
 # setwd("C:/Users/Student/OneDrive/DS-3001/")
-
+setwd("C:/Users/Lyle_/DS-3001-competition/Final_Project")
 df <- read.csv("SpotifyFeatures.csv")
 
 table(df$genre)
@@ -63,10 +64,26 @@ final_pop[,factor_cols] <- lapply(final_pop[,factor_cols], as_factor)
 final_pop$duration_ms <- as.numeric(final_pop$duration_ms)
 final_pop$popularity <- as.numeric(final_pop$popularity)
 
+```
+
+Exploratory Data Analysis
+```{r}
+summary(final_pop)
+table(df$genre)
+
+
 correlationMatrix <- cor(final_pop[, sapply(final_pop, is.numeric)], use = "complete.obs", method="pearson")
 corrplot(correlationMatrix, method = 'number')
 
+
+df3 = df[sample(1:nrow(df),10000),]
+df3 = df3[df3$popularity != 0,]
+ggplot(df3, aes(x=loudness, y=popularity)) + geom_point() + geom_smooth(method="loess", formula=y~x, se=T) + labs(title = "Song Popularity by 'Loudness'")
+ggplot(df3, aes(x=danceability, y=popularity)) + geom_point() + geom_smooth(method="loess", formula=y~x, se=T) + labs(title = "Song Popularity by 'Danceability'")
+ggplot(df3, aes(x=acousticness, y=popularity)) + geom_point() + geom_smooth(method="loess", formula=y~x, se=T) + labs(title = "Song Popularity by 'Acousticness'")
+
 ```
+
 
 Create test and training sets 
 ```{r}
