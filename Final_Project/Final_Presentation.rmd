@@ -1,0 +1,160 @@
+---
+title: "How Well can we Predict the Popularity of a Song?"
+author: ""
+date: "2022-12-09"
+output: slidy_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(tidyverse)
+#install.packages("plyr")
+library(plyr)
+library(plotly)
+#install.packages("randomForest")
+library(randomForest)
+library(rio)
+library(caret)
+library(ROCR)
+library(tidyverse)
+library(rpart)
+#install.packages("pscyh")
+library(psych)
+library(pROC)
+#install.packages("rpart.plot")
+library(rpart.plot)
+#install.packages("rattle")
+library(rattle)
+library(corrplot)
+```
+
+## Background
+
+In parsing data sets to find one usable for the purposes of this project, our group settled upon using an extensive database of spotify songs (tracks) (232,725 entries across 18 features). The features include a number of acoustic characteristics (loudness, tempo, valence, time signature, etc.), a popularity metric (from 0 to 100), and other identifying features like genre and names of the artist and track. All of the members of our team are deeply interested in music and saw this data set, given its expansiveness, as a good platform to build our work upon.
+
+The dataset can be found here: [Kaggle - Spotify Tracks DB](https://www.kaggle.com/datasets/zaheenhamidani/ultimate-spotify-tracks-db)<br /> 
+With additional credit for work to grab the data: [Github - Spotify Data Project](https://github.com/tgel0/spotify-data)
+
+## Can we use the quantifiable metrics or characteristics that defined a song to predict song popularity once it is released under the label of a specific genre?
+
+Our group settled on this question as popularity was the metric we saw as most likely determined based on the other features present in the selected dataset. Stepping back from the specific data at hand, as well, popularity is a metric that is pertinent both to businesses - be that independent artists or recording labels - and us as consumers - as popularity undeniably plays a role in what we consume; the relevance to both artist and consumer make a worthy subject for a our research question.
+
+## Music Characteristics
+
+Per the Spotify Developer API (linked [here](https://developer.spotify.com/documentation/web-api/reference/#/operations/get-audio-features)) a single track has 13 unique features which are quantifiable and contribute to the audio profile. These are detailed in the table below with descriptions and possible value ranges.
+```{r, include=FALSE}
+xx <- read.csv("./spotify.csv")
+xx[xx=="?"] <- NA
+feats <- xx[1:13,]
+misc <- xx[14:18,]
+```
+```{r}
+knitr::kable(feats, col.names = c('Characterstic', 'Description', 'Value Range'), caption = 'Table 1. Predictive features from API')
+```
+There are 5 additional features that are returned by a *GET* call to the Spotify Dev API that are useful in labeling and managing data throughout the analytics process but are not of predictive value. These are detailed in second table below. Not all of these misc. features are present in the kaggle dataset used, but were included here for complete context.
+```{r}
+knitr::kable(misc, col.names = c('Characterstic', 'Description', 'Value Range'), caption = 'Table 2. Misc. features from API')
+```
+
+## Previous Work
+
+From our research there was one example of a pre-existing project that was targeting the same question as we were. The work in question was conducted by Matt Devor; operating based on the same 13 characteristics we also identified from the API, Devor performed a range of data analysis and built towards running a Linear Regression model to directly predict popularity. Devor's work is limited in the nature of the concluding model, but in lieu of that it does serve as an extensive reference for exploratory data analysis which our team looks to build upon in our work.
+
+Reference: [Github - Predicting Spotify Song Popularity](https://github.com/MattD82/Predicting-Spotify-Song-Popularity)
+
+## Our Approach
+
+In order to address the landed upon question from above - exploring the predictive power of the acoustic characteristics of an audio track to determine a track's popularity - in a manner unique from existing work our team will use a random forest model; the model will perform regression over the continuous target variable *popularity*. Through exploratory analytics and further method decisions we seek to create a model with a sub 5% NMRSE for potential use in a real-world business context.
+
+## Random Forest with All Genres
+
+```{r echo=FALSE}
+# Data prep
+df <- read.csv("SpotifyFeatures.csv")
+
+table(df$genre)
+df2 <-unique(df)
+#art_freq <- as.data.frame(table(df2$artist_name))
+#df3 <- df2[df2$artist_name == 'Drake',]
+#final_pop <- df3[-c(1, 2, 3, 4)]
+final_pop <- df2[-c(1, 2, 3, 4)]
+
+factor_cols <- c(7, 10, 13)
+final_pop[,factor_cols] <- lapply(final_pop[,factor_cols], as_factor)
+final_pop$duration_ms <- as.numeric(final_pop$duration_ms)
+final_pop$popularity <- as.numeric(final_pop$popularity)
+
+correlationMatrix <- cor(final_pop[, sapply(final_pop, is.numeric)], use = "complete.obs", method="pearson")
+corrplot(correlationMatrix, method = 'number')
+```
+
+```{r echo=FALSE} 
+# Split into test and train datasets
+sample_rows = 1:nrow(final_pop)
+
+# sample() is a randomized function, use set.seed() to make your results reproducible.
+set.seed(1984) #sample(x, size, replace = FALSE, prob = NULL)
+test_rows = sample(sample_rows,
+                   dim(final_pop)[1]*.10, #start with 10% of our dataset, could do 20%
+                   # but random forest does require more training data because of the 
+                   # sampling so 90% might be a better approach with this small of a dataset
+                   replace = FALSE)# We don't want duplicate samples
+
+
+pop_train = final_pop[-test_rows,]
+pop_test = final_pop[test_rows,]
+
+dim(pop_train)
+
+# calculate initial mtry value
+
+mtry_tune <- function(x){
+  xx <- dim(x)[2]-1
+  sqrt(xx)
+}
+
+
+mtry_tune(final_pop)
+```
+
+```{r echo=FALSE}
+# train preliminary model
+pop_RF = randomForest(as.numeric(popularity)~.,          #<- Formula: response variable ~ predictors.
+                            #   The period means 'use all other variables in the data'.
+                            pop_train,     #<- A data frame with the variables to be used.
+                            #y = NULL,           #<- A response vector. This is unnecessary because we're specifying a response formula.
+                            #subset = NULL,      #<- This is unnecessary because we're using all the rows in the training data set.
+                            #xtest = NULL,       #<- This is already defined in the formula by the ".".
+                            #ytest = NULL,       #<- This is already defined in the formula by "PREGNANT".
+                            ntree = 1000,        #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
+                            mtry = 4,            #<- Number of variables randomly sampled as candidates at each split. Default number for classification is sqrt(# of variables). Default number for regression is (# of variables / 3).
+                            replace = TRUE,      #<- Should sampled data points be replaced.
+                            #classwt = NULL,     #<- Priors of the classes. Use this if you want to specify what proportion of the data SHOULD be in each class. This is relevant if your sample data is not completely representative of the actual population 
+                            #strata = NULL,      #<- Not necessary for our purpose here.
+                            sampsize = 100,      #<- Size of sample to draw each time.
+                            nodesize = 5,        #<- Minimum numbers of data points in terminal nodes.
+                            #maxnodes = NULL,    #<- Limits the number of maximum splits. 
+                            importance = TRUE,   #<- Should importance of predictors be assessed?
+                            #localImp = FALSE,   #<- Should casewise importance measure be computed? (Setting this to TRUE will override importance.)
+                            proximity = FALSE,    #<- Should a proximity measure between rows be calculated?
+                            norm.votes = TRUE,   #<- If TRUE (default), the final result of votes are expressed as fractions. If FALSE, raw vote counts are returned (useful for combining results from different runs).
+                            do.trace = TRUE,     #<- If set to TRUE, give a more verbose output as randomForest is run.
+                            keep.forest = TRUE,  #<- If set to FALSE, the forest will not be retained in the output object. If xtest is given, defaults to FALSE.
+                            keep.inbag = TRUE)   #<- Should an n by ntree matrix be returned that keeps track of which samples are in-bag in which trees? 
+
+#==================================================================================
+
+####  Random forest output ####
+
+# Calculate the RMSE
+sqrt(pop_RF$mse[length(pop_RF$mse)])
+
+
+# The "predicted" argument contains a vector of predictions for each 
+# data point.
+as.data.frame(pop_RF$predicted)
+```
+

@@ -39,9 +39,9 @@ library(corrplot)
 
 
 ```{r}
-setwd("C:/Users/Student/OneDrive/DS-3001/")
+# setwd("C:/Users/Student/OneDrive/DS-3001/")
 
-df <- read.csv("data/SpotifyFeatures.csv")
+df <- read.csv("SpotifyFeatures.csv")
 
 table(df$genre)
 df2 <-unique(df)
@@ -136,7 +136,7 @@ sqrt(pop_RF$mse[length(pop_RF$mse)])
 
 # The "predicted" argument contains a vector of predictions for each 
 # data point.
-View(as.data.frame(pop_RF$predicted))
+as.data.frame(pop_RF$predicted)
 
 ```
 
@@ -145,7 +145,7 @@ Take a look at the variable importance measures
 
 # The "importance" argument provides a table that includes the importance
 # of each variable to the accuracy of the classification.
-View(as.data.frame(varImp(pop_RF, type = 2, scale = TRUE))) #type 1 is error on oob, 
+as.data.frame(varImp(pop_RF, type = 2, scale = TRUE)) #type 1 is error on oob, 
                                                                       # type 2 is total decrease
 # in node impurity as measured by the Gini index, look at the differences, stop by wine for example. 
                                                         # scale divides the measures by 
@@ -189,7 +189,7 @@ pop_RF_2 = randomForest(as.numeric(popularity)~.,          #<- formula, response
 sqrt(pop_RF$mse[length(pop_RF$mse)])
 sqrt(pop_RF_2$mse[length(pop_RF_2$mse)])
 
-View(as.data.frame(pop_RF_2$predicted))
+as.data.frame(pop_RF_2$predicted)
 
 varImpPlot(pop_RF_2,     #<- the randomForest model to use
            sort = TRUE,        #<- whether to sort variables by decreasing order of importance
@@ -235,7 +235,7 @@ pop_test_RF
 
 sqrt(pop_test_RF$mse[length(pop_test_RF$mse)])
 
-View(as.data.frame(pop_test_RF$predicted))
+as.data.frame(pop_test_RF$predicted)
 
 varImpPlot(pop_test_RF,     #<- the randomForest model to use
            sort = TRUE,        #<- whether to sort variables by decreasing order of importance
