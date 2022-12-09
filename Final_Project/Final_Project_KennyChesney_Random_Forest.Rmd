@@ -112,6 +112,7 @@ rap_RF = randomForest(as.numeric(popularity)~.,
 
 # Calculate the RMSE
 sqrt(rap_RF$mse[length(rap_RF$mse)])
+rap_RF
 
 View(as.data.frame(rap_RF$predicted))
 
@@ -159,7 +160,8 @@ rap_RF_2 = randomForest(as.numeric(popularity)~.,
 
 
 sqrt(rap_RF$mse[length(rap_RF$mse)])
-sqrt(rap_RF_2$mse[length(rap_RF_2$mse)])
+paste("rap_RF_2 RMSE:",sqrt(rap_RF_2$mse[length(rap_RF_2$mse)]), sep=" ")
+paste("rap_RF_2 NRMSE:",sqrt(rap_RF_2$mse[length(rap_RF_2$mse)])/(max(rap_train$popularity)- min(rap_train$popularity)), sep=" ")
 rap_RF_2
 
 # View(as.data.frame(rap_RF_2$predicted))
@@ -184,6 +186,7 @@ rap_test_predict = predict(rap_RF_2,
                             predict.all = TRUE)
 
 rmse(rap_test$popularity, rap_test_predict$aggregate)
+paste("rap_RF_2 test NRMSE:",rmse(rap_test$popularity, rap_test_predict$aggregate)/(max(rap_test$popularity)- min(rap_test$popularity)), sep=" ")
 
 
 # rap_test_RF = randomForest(as.numeric(popularity)~.,
