@@ -35,6 +35,7 @@ library(corrplot)
 library(knitr)
 library(ggplot2)
 library(mltools)
+library(Metrics)
 ```
 
 ## Background
@@ -211,9 +212,9 @@ knitr::kable(as.data.frame(varImp(pop_RF, type = 2, scale = TRUE))) #type 1 is e
 
 ## Optimizing the model
 
-### To optimize the model we tuned the mtry hyperparameter. We found that when run on our tune dataset 2 was a more accurate mtry value as opposed to 4 when we had originally created the model. In response to this we created another model with the mtry set to 2. This gave better results (both rmse and nrmse) when run on our test dataset.
+To optimize the model we tuned the mtry hyperparameter. We found that when run on our tune dataset 2 was a more accurate mtry value as opposed to 4 when we had originally created the model. In response to this we created another model with the mtry set to 2. This gave better results (both rmse and nrmse) when run on our test dataset.
 
-```{r RF_2, include=FALSE}
+```{r RF_2}
 #### Optimize the random forest model ####
 
 pop_RF_mtry = tuneRF(pop_tune[ ,2:14],  
@@ -295,4 +296,347 @@ paste("pop_RF_2 test NRMSE:",rmse(pop_test$popularity, pop_test_predict$aggregat
 
 We followed the same steps as above when working with 6 other datasets: rap music, jazz music, country music, songs by Kenny Chesney, Miles Davis, and Drake.
 
+## Rap Data Prep
 
+```{r rapPrep, echo=T}
+# table(df$genre)
+df2 <-unique(df)
+df3 <- df2[df2$genre == 'Rap',]
+final_rap <- df3[-c(1, 2, 3, 4)]
+
+factor_cols <- c(7, 10, 13)
+final_rap[,factor_cols] <- lapply(final_rap[,factor_cols], as_factor)
+final_rap$duration_ms <- as.numeric(final_rap$duration_ms)
+final_rap$popularity <- as.numeric(final_rap$popularity)
+final_rap = final_rap[complete.cases(final_rap),]
+
+correlationMatrix <- cor(final_rap[, sapply(final_rap, is.numeric)], use = "complete.obs", method="pearson")
+corrplot(correlationMatrix, method = 'number')
+```
+
+## Creating Models for Rap Music
+
+```{r rapMtry}
+mytry_tune <- function(x){
+  xx <- dim(x)[2]-1
+  sqrt(xx)
+}
+
+
+paste('Starting mtry for rap dataset:', mytry_tune(final_rap),'rounds to 4', sep=' ')
+```
+```{r rapPrelimModel, include=F}
+set.seed(1984) 
+test_rows = createDataPartition(final_rap$popularity, p=.9, list=F, time=1)
+
+
+rap_train = final_rap[-test_rows,]
+rap_test = final_rap[test_rows,]
+
+tune_rows = createDataPartition(rap_test$popularity, p=.5, list=F, time=1)
+
+rap_tune = rap_test[tune_rows,]
+rap_test = rap_test[-tune_rows,]
+
+rap_RF = randomForest(as.numeric(popularity)~.,      
+                            rap_train,
+                            ntree = 1000, 
+                            mtry = 4,
+                            replace = TRUE,
+                            sampsize = 100,
+                            nodesize = 5,
+                            importance = TRUE,
+                            proximity = FALSE,
+                            norm.votes = TRUE,
+                            do.trace = TRUE,
+                            keep.forest = TRUE,
+                            keep.inbag = TRUE)
+
+#==================================================================================
+```
+```{r rapRMSE}
+# Calculate the RMSE
+paste('RMSE for first Rap RF model:', sqrt(rap_RF$mse[length(rap_RF$mse)]), sep=' ')
+```
+```{r rapTune}
+rap_RF_mtry = tuneRF(rap_tune[ ,2:14],  
+                           rap_tune$popularity,   
+                           mtryStart = 4,                        
+                           ntreeTry = 100,                       
+                           stepFactor = 3,                       
+                           improve = 0.05,                       
+                           trace = TRUE,                         
+                           plot = TRUE,                          
+                           doBest = FALSE)    
+```
+
+## Tuned Rap Model
+
+```{r rapTuned, include=F}
+set.seed(1984)	
+rap_RF_2 = randomForest(as.numeric(popularity)~.,
+                              rap_train,
+                              ntree = 500,
+                              mtry = 5,
+                              replace = TRUE,
+                              sampsize = 400,
+                              nodesize = 5,
+                              importance = TRUE,
+                              proximity = FALSE,
+                              norm.votes = TRUE,
+                              do.trace = TRUE,
+                              keep.forest = TRUE,
+                              keep.inbag = TRUE) 
+```
+```{r tunedRMSE}
+# sqrt(rap_RF$mse[length(rap_RF$mse)])
+paste("rap_RF_2 RMSE:",sqrt(rap_RF_2$mse[length(rap_RF_2$mse)]), sep=" ")
+paste("rap_RF_2 NRMSE:",sqrt(rap_RF_2$mse[length(rap_RF_2$mse)])/(max(rap_train$popularity)- min(rap_train$popularity)), sep=" ")
+rap_RF_2
+
+# View(as.data.frame(rap_RF_2$predicted))
+
+varImpPlot(rap_RF_2,
+           sort = TRUE,
+           n.var = 10,
+           main = "Important Factors for Identifying Rap Song Popularity",
+           bg = "white",
+           color = "blue",
+           lcolor = "orange")
+```
+
+## Speechiness Visualization
+
+```{r speechViz}
+ggplot(final_rap, aes(x=speechiness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Rap Song Popularity by 'Speechiness'") 
+```
+
+## Danceability Visualization
+
+```{r danceViz}
+ggplot(final_rap, aes(x=danceability, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Rap Song Popularity by 'Danceability'")
+```
+
+## Evaluating Against the Test Dataset
+
+```{r rapTest}
+rap_test_predict = predict(rap_RF_2,      
+                            rap_test,      
+                            type = "response",   
+                            predict.all = TRUE)
+
+paste('rap_RF_2 test RMSE:', rmse(rap_test$popularity, rap_test_predict$aggregate), sep=' ')
+paste("rap_RF_2 test NRMSE:",rmse(rap_test$popularity, rap_test_predict$aggregate)/(max(rap_test$popularity)- min(rap_test$popularity)), sep=" ")
+```
+
+
+```{r jazzPrep}
+df2 <-unique(df)
+df3 <- df2[df2$genre == 'Jazz',]
+final_rap <- df3[-c(1, 2, 3, 4)]
+factor_cols <- c(7, 10, 13)
+final_rap[,factor_cols] <- lapply(final_rap[,factor_cols], as_factor)
+final_rap$duration_ms <- as.numeric(final_rap$duration_ms)
+final_rap$popularity <- as.numeric(final_rap$popularity)
+final_rap = final_rap[complete.cases(final_rap),]
+```
+```{r jazzSplit}
+set.seed(1984) 
+test_rows = createDataPartition(final_rap$popularity, p=.9, list=F, time=1)
+
+rap_train = final_rap[-test_rows,]
+rap_test = final_rap[test_rows,]
+
+tune_rows = createDataPartition(rap_test$popularity, p=.5, list=F, time=1)
+
+rap_tune = rap_test[tune_rows,]
+rap_test = rap_test[-tune_rows,]
+```
+
+## Creating Models for Jazz Music
+
+```{r jazzModels, include=F}
+rap_RF = randomForest(as.numeric(popularity)~.,      
+                            rap_train,
+                            ntree = 1000, 
+                            mtry = 4,
+                            replace = TRUE,
+                            sampsize = 100,
+                            nodesize = 5,
+                            importance = TRUE,
+                            proximity = FALSE,
+                            norm.votes = TRUE,
+                            do.trace = TRUE,
+                            keep.forest = TRUE,
+                            keep.inbag = TRUE)
+```
+```{r jazzTune}
+paste('RMSE of first Jazz Model:', sqrt(rap_RF$mse[length(rap_RF$mse)]), sep=' ')
+
+rap_RF_mtry = tuneRF(rap_train[ ,2:14],  
+                           rap_train$popularity,   
+                           mtryStart = 4,                        
+                           ntreeTry = 100,                       
+                           stepFactor = 2,                       
+                           improve = 0.05,                       
+                           trace = TRUE,                         
+                           plot = TRUE,                          
+                           doBest = FALSE)  
+```
+
+## Optimized Jazz Model
+```{r jazzOpt, include=F}
+set.seed(1984)	
+rap_RF_2 = randomForest(as.numeric(popularity)~.,
+                              rap_train,
+                              ntree = 500,
+                              mtry = 4,
+                              replace = TRUE,
+                              sampsize = 100,
+                              nodesize = 5,
+                              importance = TRUE,
+                              proximity = FALSE,
+                              norm.votes = TRUE,
+                              do.trace = TRUE,
+                              keep.forest = TRUE,
+                              keep.inbag = TRUE) 
+```
+```{r jazzOptStats}
+paste("jazz_RF_2 RMSE:",sqrt(rap_RF_2$mse[length(rap_RF_2$mse)]), sep=" ")
+paste("jazz_RF_2 NRMSE:",sqrt(rap_RF_2$mse[length(rap_RF_2$mse)])/(max(rap_train$popularity)- min(rap_train$popularity)), sep=" ")
+
+varImpPlot(rap_RF_2,
+           sort = TRUE,
+           n.var = 10,
+           main = "Important Factors for Identifying Jazz Song Popularity",
+           bg = "white",
+           color = "blue",
+           lcolor = "orange")
+```
+
+## Jazz Song Popularity vs. Instrumentalness
+
+```{r jazzInstViz}
+ggplot(final_rap, aes(x=instrumentalness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Jazz Song Popularity by 'Instrumentalness'")
+```
+
+## Jazz Model Testing
+
+```{r jazzTest}
+rap_test_predict = predict(rap_RF_2,      
+                            rap_test,      
+                            type = "response",   
+                            predict.all = TRUE)
+
+paste('jazz_RF_r test RMSE:', rmse(rap_test$popularity, rap_test_predict$aggregate), sep=' ')
+paste("jazz_RF_2 test NRMSE:",rmse(rap_test$popularity, rap_test_predict$aggregate)/(max(rap_test$popularity)- min(rap_test$popularity)), sep=" ")
+```
+
+```{r countryPrep}
+df2 <-unique(df)
+df3 <- df2[df2$genre == 'Country',]
+final_rap <- df3[-c(1, 2, 3, 4)]
+factor_cols <- c(7, 10, 13)
+final_rap[,factor_cols] <- lapply(final_rap[,factor_cols], as_factor)
+final_rap$duration_ms <- as.numeric(final_rap$duration_ms)
+final_rap$popularity <- as.numeric(final_rap$popularity)
+final_rap = final_rap[complete.cases(final_rap),]
+```
+```{r countrySplit}
+set.seed(1984) 
+test_rows = createDataPartition(final_rap$popularity, p=.9, list=F, time=1)
+
+rap_train = final_rap[-test_rows,]
+rap_test = final_rap[test_rows,]
+
+tune_rows = createDataPartition(rap_test$popularity, p=.5, list=F, time=1)
+
+rap_tune = rap_test[tune_rows,]
+rap_test = rap_test[-tune_rows,]
+```
+
+## Creating Models for Country Music
+
+```{r countryModels, include=F}
+rap_RF = randomForest(as.numeric(popularity)~.,      
+                            rap_train,
+                            ntree = 1000, 
+                            mtry = 4,
+                            replace = TRUE,
+                            sampsize = 100,
+                            nodesize = 5,
+                            importance = TRUE,
+                            proximity = FALSE,
+                            norm.votes = TRUE,
+                            do.trace = TRUE,
+                            keep.forest = TRUE,
+                            keep.inbag = TRUE)
+```
+```{r countryTune}
+paste('RMSE of first Country Model:', sqrt(rap_RF$mse[length(rap_RF$mse)]), sep=' ')
+
+rap_RF_mtry = tuneRF(rap_train[ ,2:14],  
+                           rap_train$popularity,   
+                           mtryStart = 4,                        
+                           ntreeTry = 100,                       
+                           stepFactor = 2,                       
+                           improve = 0.05,                       
+                           trace = TRUE,                         
+                           plot = TRUE,                          
+                           doBest = FALSE)  
+```
+
+## Optimized Country Model
+
+```{r countryOpt, include=F}
+set.seed(1984)	
+rap_RF_2 = randomForest(as.numeric(popularity)~.,
+                              rap_train,
+                              ntree = 500,
+                              mtry = 4,
+                              replace = TRUE,
+                              sampsize = 100,
+                              nodesize = 5,
+                              importance = TRUE,
+                              proximity = FALSE,
+                              norm.votes = TRUE,
+                              do.trace = TRUE,
+                              keep.forest = TRUE,
+                              keep.inbag = TRUE) 
+```
+```{r countryOptStats}
+paste("country_RF_2 RMSE:",sqrt(rap_RF_2$mse[length(rap_RF_2$mse)]), sep=" ")
+paste("country_RF_2 NRMSE:",sqrt(rap_RF_2$mse[length(rap_RF_2$mse)])/(max(rap_train$popularity)- min(rap_train$popularity)), sep=" ")
+
+varImpPlot(rap_RF_2,
+           sort = TRUE,
+           n.var = 10,
+           main = "Important Factors for Identifying Country Song Popularity",
+           bg = "white",
+           color = "blue",
+           lcolor = "orange")
+```
+
+## Country Song Popularity vs. Energy
+
+```{r countryEnergViz}
+ggplot(final_rap, aes(x=energy, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Country Song Popularity by 'Energy'")
+```
+
+## Country Song Popularity vs. Loudness
+
+```{r countryInstViz}
+ggplot(final_rap, aes(x=loudness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Country Song Popularity by 'Loundess'")
+```
+
+## Country Model Testing
+
+```{r countryTest}
+rap_test_predict = predict(rap_RF_2,      
+                            rap_test,      
+                            type = "response",   
+                            predict.all = TRUE)
+
+paste('country_RF_r test RMSE:', rmse(rap_test$popularity, rap_test_predict$aggregate), sep=' ')
+paste("country_RF_2 test NRMSE:",rmse(rap_test$popularity, rap_test_predict$aggregate)/(max(rap_test$popularity)- min(rap_test$popularity)), sep=" ")
+```
