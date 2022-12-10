@@ -50,7 +50,7 @@ sum(!complete.cases(states))
 mice::md.pattern(states)
 unique(states$STATE)
 
-remove_cols <- c(24,22,19,18,17,16,14,13,3)
+remove_cols <- c(19,18,17,16,14,13,3)
 states1 <- states[,-remove_cols]
 mice::md.pattern(states1)
 states2 <- states1[complete.cases(states1),]
@@ -73,7 +73,7 @@ fitControl <- trainControl(method = "repeatedcv",
                           number = 10,
                           repeats = 5) 
 
-features <- train[,-15]
+features <- train[,-16]
 target <- train$AVG_READING_4_SCORE
 
 set.seed(1999)
@@ -110,7 +110,7 @@ postResample(df_pred1, tune$AVG_READING_4_SCORE)
 Training on full dataset
 
 ```{r}
-full.features <- states2[,-15]
+full.features <- states2[,-16]
 full.target <- states2$AVG_READING_4_SCORE
 
 full.myDT <- train(x=full.features,
@@ -119,4 +119,28 @@ full.myDT <- train(x=full.features,
                 trControl=fitControl,
                 tuneGrid=tree.grid,
                 metric="RMSE")
+```
+
+Predicting w/ public test dataset
+
+```{r}
+test_df <- read.csv('data/test_set_public.csv')
+ID <- test_df[,1]
+test_df <- test_df[,-1]
+
+test_df$STATE <- fct_collapse(test_df$STATE,
+                                      NewEngland = c("CONNECTICUT", "MAINE", "MASSACHUSETTS", "NEW_HAMPSHIRE", "RHODE_ISLAND", "VERMONT"),
+                                      MiddleAtlantic = c("DELAWARE", "MARYLAND", "NEW_JERSEY", "NEW_YORK", "PENNSYLVANIA"), 
+                                      South = c("ALABAMA", "ARKANSAS", "FLORIDA", "GEORGIA", "KENTUCKY", "LOUISIANA", "MISSISSIPPI", "MISSOURI", "NORTH_CAROLINA", "SOUTH_CAROLINA", "TENNESSEE", "VIRGINIA", "WEST_VIRGINIA"),
+                                      Midwest = c("ILLINOIS", "INDIANA", "IOWA", "KANSAS", "MICHIGAN", "MINNESOTA", "NEBRASKA", "NORTH_DAKOTA", "OHIO", "SOUTH_DAKOTA", "WISCONSIN"), 
+                                      Southwest = c("ARIZONA", "NEW_MEXICO", "OKLAHOMA", "TEXAS"), 
+                                      West = c("ALASKA", "CALIFORNIA", "HAWAII", "IDAHO", "MONTANA", "NEVADA", "OREGON", "UTAH", "WASHINGTON", "WYOMING", "COLORADO"),
+                                      Other = c("DISTRICT_OF_COLUMBIA", "DODEA", "NATIONAL")
+                                      )
+
+test_pred <- predict(full.myDT$finalModel, test_df)
+predictions <- data.frame(ID)
+predictions$PREDICTED <- test_pred
+
+write.csv(predictions, 'predictions1.csv', row.names=F)
 ```

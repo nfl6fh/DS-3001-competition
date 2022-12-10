@@ -1,12 +1,15 @@
 ---
 title: "How Well can we Predict the Popularity of a Song?"
 author: ""
-date: "2022-12-09"
+date: "2022-12-10"
 output: slidy_presentation
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(cache = TRUE)
 ```
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
@@ -29,6 +32,9 @@ library(rpart.plot)
 #install.packages("rattle")
 library(rattle)
 library(corrplot)
+library(knitr)
+library(ggplot2)
+library(mltools)
 ```
 
 ## Background
@@ -50,8 +56,7 @@ xx <- read.csv("./spotify.csv")
 xx[xx=="?"] <- NA
 feats <- xx[1:13,]
 misc <- xx[14:18,]
-```
-```{r}
+
 knitr::kable(feats, col.names = c('Characterstic', 'Description', 'Value Range'), caption = 'Table 1. Predictive features from API')
 ```
 There are 5 additional features that are returned by a *GET* call to the Spotify Dev API that are useful in labeling and managing data throughout the analytics process but are not of predictive value. These are detailed in second table below. Not all of these misc. features are present in the kaggle dataset used, but were included here for complete context.
@@ -69,45 +74,76 @@ Reference: [Github - Predicting Spotify Song Popularity](https://github.com/Matt
 
 In order to address the landed upon question from above - exploring the predictive power of the acoustic characteristics of an audio track to determine a track's popularity - in a manner unique from existing work our team will use a random forest model; the model will perform regression over the continuous target variable *popularity*. Through exploratory analytics and further method decisions we seek to create a model with a sub 5% NMRSE for potential use in a real-world business context.
 
-## Random Forest with All Genres
+## Preliminary Data Analysis - Count of Songs in Each Genre
 
-```{r echo=FALSE}
+```{r readData, echo=FALSE}
 # Data prep
 df <- read.csv("SpotifyFeatures.csv")
 
-table(df$genre)
 df2 <-unique(df)
 #art_freq <- as.data.frame(table(df2$artist_name))
 #df3 <- df2[df2$artist_name == 'Drake',]
 #final_pop <- df3[-c(1, 2, 3, 4)]
 final_pop <- df2[-c(1, 2, 3, 4)]
+final_pop = unique(final_pop)
+final_pop = final_pop[sample(1:nrow(final_pop),19000),]
+```
 
+### Final Data Prep (factorize all character columns and cast to numeric all numeric columns)
+```{r dataPrep, echo=TRUE}
 factor_cols <- c(7, 10, 13)
 final_pop[,factor_cols] <- lapply(final_pop[,factor_cols], as_factor)
 final_pop$duration_ms <- as.numeric(final_pop$duration_ms)
 final_pop$popularity <- as.numeric(final_pop$popularity)
+```
 
+## Preliminary Data Analysis - Correlation Plot Between Features
+
+```{r corrMatrix, echo=FALSE}
 correlationMatrix <- cor(final_pop[, sapply(final_pop, is.numeric)], use = "complete.obs", method="pearson")
 corrplot(correlationMatrix, method = 'number')
 ```
 
-```{r echo=FALSE} 
+## Preliminary Data Analysis - Loudness Plot
+```{r loudnessPlot}
+# making the sample smaller for ggplot efficiency
+df3 = df[sample(1:nrow(df),10000),]
+df3 = df3[df3$popularity != 0,]
+ggplot(df3, aes(x=loudness, y=popularity)) + geom_point() + geom_smooth(method="loess", formula=y~x, se=T) + labs(title = "Song Popularity by 'Loudness'") + theme(plot.title=element_text(hjust=.5))
+```
+
+## Preliminary Data Analysis - Danceability Plot
+```{r danceabilityPlot}
+ggplot(df3, aes(x=danceability, y=popularity)) + geom_point() + geom_smooth(method="loess", formula=y~x, se=T) + labs(title = "Song Popularity by 'Danceability'") + theme(plot.title=element_text(hjust=.5))
+```
+
+## Preliminary Data Analysis - Acousticness Plot
+```{r acousticnessPlot}
+ggplot(df3, aes(x=acousticness, y=popularity)) + geom_point() + geom_smooth(method="loess", formula=y~x, se=T) + labs(title = "Song Popularity by 'Acousticness'") + theme(plot.title=element_text(hjust=.5))
+```
+
+## Random Forest with All Genres - First Model
+
+```{r splitData ,echo=FALSE} 
 # Split into test and train datasets
 sample_rows = 1:nrow(final_pop)
 
 # sample() is a randomized function, use set.seed() to make your results reproducible.
 set.seed(1984) #sample(x, size, replace = FALSE, prob = NULL)
 test_rows = sample(sample_rows,
-                   dim(final_pop)[1]*.10, #start with 10% of our dataset, could do 20%
-                   # but random forest does require more training data because of the 
-                   # sampling so 90% might be a better approach with this small of a dataset
+                   dim(final_pop)[1]*.10,
                    replace = FALSE)# We don't want duplicate samples
-
 
 pop_train = final_pop[-test_rows,]
 pop_test = final_pop[test_rows,]
 
-dim(pop_train)
+tune_rows = createDataPartition(pop_test$popularity, p=.5,
+                                  list=F,
+                                  time=1)
+
+pop_tune = pop_test[tune_rows,]
+pop_test = pop_test[-tune_rows,]
+# dim(pop_train)
 
 # calculate initial mtry value
 
@@ -116,11 +152,11 @@ mtry_tune <- function(x){
   sqrt(xx)
 }
 
-
-mtry_tune(final_pop)
+paste('Initial mtry value:', 
+mtry_tune(final_pop), sep=' ')
 ```
 
-```{r echo=FALSE}
+```{r RF_1, include=FALSE}
 # train preliminary model
 pop_RF = randomForest(as.numeric(popularity)~.,          #<- Formula: response variable ~ predictors.
                             #   The period means 'use all other variables in the data'.
@@ -146,15 +182,117 @@ pop_RF = randomForest(as.numeric(popularity)~.,          #<- Formula: response v
                             keep.inbag = TRUE)   #<- Should an n by ntree matrix be returned that keeps track of which samples are in-bag in which trees? 
 
 #==================================================================================
-
+```
+```{r rmse, echo=FALSE}
 ####  Random forest output ####
 
 # Calculate the RMSE
-sqrt(pop_RF$mse[length(pop_RF$mse)])
+paste('RMSE of our first RF model is:',
+sqrt(pop_RF$mse[length(pop_RF$mse)]), sep=' ')
 
 
 # The "predicted" argument contains a vector of predictions for each 
 # data point.
-as.data.frame(pop_RF$predicted)
+# as.data.frame(pop_RF$predicted)
 ```
+
+
+## Look at variable importance
+
+```{r varImp1}
+# The "importance" argument provides a table that includes the importance
+# of each variable to the accuracy of the classification.
+knitr::kable(as.data.frame(varImp(pop_RF, type = 2, scale = TRUE))) #type 1 is error on oob, 
+                                                                      # type 2 is total decrease
+# in node impurity as measured by the Gini index, look at the differences, stop by wine for example. 
+                                                        # scale divides the measures by 
+                                                        # their standard errors
+```
+
+## Optimizing the model
+
+### To optimize the model we tuned the mtry hyperparameter. We found that when run on our tune dataset 2 was a more accurate mtry value as opposed to 4 when we had originally created the model. In response to this we created another model with the mtry set to 2. This gave better results (both rmse and nrmse) when run on our test dataset.
+
+```{r RF_2, include=FALSE}
+#### Optimize the random forest model ####
+
+pop_RF_mtry = tuneRF(pop_tune[ ,2:14],  
+                           pop_tune$popularity,   
+                           mtryStart = 4,                        
+                           ntreeTry = 100,                       
+                           stepFactor = 3,                       
+                           improve = 0.05,                       
+                           trace = TRUE,                         
+                           plot = TRUE,                          
+                           doBest = FALSE)                       
+
+# pop_RF_mtry
+```
+
+## Creating the Tuned Model
+
+```{r secondModel, include=F}
+set.seed(1984)	
+pop_RF_2 = randomForest(as.numeric(popularity)~.,          #<- formula, response variable ~ predictors.
+                              #   the period means 'use all other variables in the data'.
+                              pop_train,     #<- A data frame with variables to be used.
+                              #y = NULL,           #<- A response vector. This is unnecessary because we're specifying a response formula.
+                              #subset = NULL,      #<- This is unneccessary because we're using all the rows in the training data set.
+                              #xtest = NULL,       #<- This is already defined in the formula by the ".".
+                              #ytest = NULL,       #<- This is already defined in the formula by "PREGNANT".
+                              ntree = 200,          #<- Number of trees to grow. This should not be set to too small a number, to ensure that every input row gets classified at least a few times.
+                              mtry = 2,            #<- Number of variables randomly sampled as candidates at each split. Default number for classification is sqrt(# of variables). Default number for regression is (# of variables / 3).
+                              replace = TRUE,      #<- Should sampled data points be replaced.
+                              #classwt = NULL,     #<- Priors of the classes. We will work through this later. 
+                              #strata = NULL,      #<- Not necessary for our purpose here.
+                              sampsize = 2000,      #<- Size of sample to draw each time.
+                              nodesize = 5,        #<- Minimum numbers of data points in terminal nodes.
+                              #maxnodes = NULL,    #<- The "nodesize" argument limits the number of maximum splits. 
+                              importance = TRUE,   #<- Should importance predictors be assessed?
+                              #localImp = FALSE,   #<- Should casewise importance measure be computed? (Setting this to TRUE will override importance.)
+                              proximity = FALSE,    #<- Should a proximity measure between rows be calculated?
+                              norm.votes = TRUE,   #<- If TRUE (default), the final result of votes are expressed as fractions. If FALSE, raw vote counts are returned (useful for combining results from different runs).
+                              do.trace = TRUE,     #<- If set to TRUE, give a more verbose output as randomForest is run.
+                              keep.forest = TRUE,  #<- If set to FALSE, the forest will not be retained in the output object. If xtest is given, defaults to FALSE.
+                              keep.inbag = TRUE) 
+```
+
+```{r varImpPlot}
+
+paste('RMSE of original model:', 
+sqrt(pop_RF$mse[length(pop_RF$mse)]), sep=' ')
+paste('RMSE of optimized model:',
+sqrt(pop_RF_2$mse[length(pop_RF_2$mse)]), sep=' ')
+
+# as.data.frame(pop_RF_2$predicted)
+
+varImpPlot(pop_RF_2,     #<- the randomForest model to use
+           sort = TRUE,        #<- whether to sort variables by decreasing order of importance
+           n.var = 10,        #<- number of variables to display
+           main = "Important Factors for Identifying Song Popularity",
+           #cex = 2,           #<- size of characters or symbols
+           bg = "white",       #<- background color for the plot
+           color = "blue",     #<- color to use for the points and labels
+           lcolor = "orange")  #<- color to use for the horizontal lines
+
+```
+
+## Testing the Model
+
+### After testing the model we found an rmse of around 14.1 and a nrmse of around .16
+
+```{r testing}
+pop_test_predict = predict(pop_RF_2,      
+                            pop_test,      
+                            type = "response",   
+                            predict.all = TRUE)
+
+paste('pop_RF_2 rmse:', rmse(pop_test$popularity, pop_test_predict$aggregate), sep=' ')
+paste("pop_RF_2 test NRMSE:",rmse(pop_test$popularity, pop_test_predict$aggregate)/(max(pop_test$popularity)- min(pop_test$popularity)), sep=" ")
+```
+
+## Exploration With Focused Data
+
+We followed the same steps as above when working with 6 other datasets: rap music, jazz music, country music, songs by Kenny Chesney, Miles Davis, and Drake.
+
 

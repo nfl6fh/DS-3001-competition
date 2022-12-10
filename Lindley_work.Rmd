@@ -1,0 +1,60 @@
+---
+Title: "Competition Code"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(mice)
+```
+
+```{r}
+df <- read.csv('~/DS-3001-competition/data/states_all_2_training.csv')
+
+sum(is.na(df$AVG_READING_4_SCORE))
+
+mice::md.pattern(df)
+
+table(df$STATE)
+
+unique(df$STATE)
+
+colSums(is.na(df))
+
+df2 <- df[complete.cases(df$AVG_READING_4_SCORE),]
+mice::md.pattern(df1)
+df1 <- df[complete.cases(df),]
+
+df1$STATE <- fct_collapse(df1$STATE,
+                                      NewEngland = c("CONNECTICUT", "MAINE", "MASSACHUSETTS", "NEW_HAMPSHIRE", "RHODE_ISLAND", "VERMONT"),
+                                      MiddleAtlantic = c("DELAWARE", "MARYLAND", "NEW_JERSEY", "NEW_YORK", "PENNSYLVANIA"), 
+                                      South = c("ALABAMA", "ARKANSAS", "FLORIDA", "GEORGIA", "KENTUCKY", "LOUISIANA", "MISSISSIPPI", "MISSOURI", "NORTH_CAROLINA", "SOUTH_CAROLINA", "TENNESSEE", "VIRGINIA", "WEST_VIRGINIA"),
+                                      Midwest = c("ILLINOIS", "INDIANA", "IOWA", "KANSAS", "MICHIGAN", "MINNESOTA", "NEBRASKA", "NORTH_DAKOTA", "OHIO", "SOUTH_DAKOTA", "WISCONSIN"), 
+                                      Southwest = c("ARIZONA", "NEW_MEXICO", "OKLAHOMA", "TEXAS"), 
+                                      West = c("ALASKA", "CALIFORNIA", "HAWAII", "IDAHO", "MONTANA", "NEVADA", "OREGON", "UTAH", "WASHINGTON", "WYOMING", "COLORADO"),
+                                      Other = c("DISTRICT_OF_COLUMBIA", "DODEA", "NATIONAL")
+                                      )
+```
+
+```{r}
+split_index <- createDataPartition(df$AVG_READING_4_SCORE, p=.8,
+                                   list=F,
+                                   times=1)
+
+train <- df[split_index,]
+dim(train)
+
+test <- df[-split_index,]
+dim(test)
+
+tuneTestSplit <- createDataPartition(test$AVG_READING_4_SCORE, p=.5,
+                                     list=F,
+                                     times=1)
+
+tune <- test[tuneTestSplit,]
+dim(tune)
+
+test <- test[tuneTestSplit,]
+dim(test)
+```
