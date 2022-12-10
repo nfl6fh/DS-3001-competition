@@ -1,7 +1,7 @@
 ---
 title: "How Well can we Predict the Popularity of a Song?"
-author: ""
-date: "2022-12-10"
+author: "Nate Lindley, Aidan Hijazi-Klop, Alex Williams, Lyle Johnson"
+date: "12/10/2022"
 output: slidy_presentation
 editor_options: 
   chunk_output_type: console
