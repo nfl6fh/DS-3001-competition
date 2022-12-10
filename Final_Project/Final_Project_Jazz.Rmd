@@ -180,6 +180,11 @@ varImpPlot(rap_RF_2,
 
 ```
 
+Visualization of key metrics for song popularity
+```{r}
+ggplot(final_rap, aes(x=instrumentalness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Song Popularity by 'Instrumentalness'") 
+```
+
 Once a final model has been selected (hyper-parameters of the model are set), evaluate the model using the test dataset. 
 ```{r}
 rap_test_predict = predict(rap_RF_2,      
