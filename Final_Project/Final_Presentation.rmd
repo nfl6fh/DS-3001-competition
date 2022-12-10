@@ -326,7 +326,7 @@ paste('Starting mtry for rap dataset:', mytry_tune(final_rap),'rounds to 4', sep
 ```
 ```{r rapPrelimModel, include=F}
 set.seed(1984) 
-test_rows = createDataPartition(final_rap$popularity, p=.9, list=F, time=1)
+test_rows = createDataPartition(final_rap$popularity, p=.1, list=F, time=1)
 
 
 rap_train = final_rap[-test_rows,]
@@ -407,16 +407,16 @@ varImpPlot(rap_RF_2,
 ## Speechiness Visualization
 
 ```{r speechViz}
-ggplot(final_rap, aes(x=speechiness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Rap Song Popularity by 'Speechiness'") 
+ggplot(final_rap, aes(x=speechiness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Rap Song Popularity by 'Speechiness'")  + theme(plot.title=element_text(hjust=.5))
 ```
 
 ## Danceability Visualization
 
 ```{r danceViz}
-ggplot(final_rap, aes(x=danceability, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Rap Song Popularity by 'Danceability'")
+ggplot(final_rap, aes(x=danceability, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Rap Song Popularity by 'Danceability'") + theme(plot.title=element_text(hjust=.5))
 ```
 
-## Evaluating Against the Test Dataset
+## Rap Model Testing
 
 ```{r rapTest}
 rap_test_predict = predict(rap_RF_2,      
@@ -441,7 +441,7 @@ final_rap = final_rap[complete.cases(final_rap),]
 ```
 ```{r jazzSplit}
 set.seed(1984) 
-test_rows = createDataPartition(final_rap$popularity, p=.9, list=F, time=1)
+test_rows = createDataPartition(final_rap$popularity, p=.1, list=F, time=1)
 
 rap_train = final_rap[-test_rows,]
 rap_test = final_rap[test_rows,]
@@ -516,7 +516,7 @@ varImpPlot(rap_RF_2,
 ## Jazz Song Popularity vs. Instrumentalness
 
 ```{r jazzInstViz}
-ggplot(final_rap, aes(x=instrumentalness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Jazz Song Popularity by 'Instrumentalness'")
+ggplot(final_rap, aes(x=instrumentalness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Jazz Song Popularity by 'Instrumentalness'") + theme(plot.title=element_text(hjust=.5))
 ```
 
 ## Jazz Model Testing
@@ -543,7 +543,7 @@ final_rap = final_rap[complete.cases(final_rap),]
 ```
 ```{r countrySplit}
 set.seed(1984) 
-test_rows = createDataPartition(final_rap$popularity, p=.9, list=F, time=1)
+test_rows = createDataPartition(final_rap$popularity, p=.1, list=F, time=1)
 
 rap_train = final_rap[-test_rows,]
 rap_test = final_rap[test_rows,]
@@ -616,16 +616,16 @@ varImpPlot(rap_RF_2,
            lcolor = "orange")
 ```
 
-## Country Song Popularity vs. Energy
+## Country Song Popularity vs. Instrumentalness
 
 ```{r countryEnergViz}
-ggplot(final_rap, aes(x=energy, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Country Song Popularity by 'Energy'")
+ggplot(final_rap, aes(x=instrumentalness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Country Song Popularity by 'Instrumentalness'") + theme(plot.title=element_text(hjust=.5))
 ```
 
 ## Country Song Popularity vs. Loudness
 
 ```{r countryInstViz}
-ggplot(final_rap, aes(x=loudness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Country Song Popularity by 'Loundess'")
+ggplot(final_rap, aes(x=loudness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Country Song Popularity by 'Loundess'") + theme(plot.title=element_text(hjust=.5))
 ```
 
 ## Country Model Testing
