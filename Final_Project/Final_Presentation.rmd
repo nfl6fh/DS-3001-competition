@@ -73,7 +73,7 @@ Reference: [Github - Predicting Spotify Song Popularity](https://github.com/Matt
 
 ## Our Approach
 
-In order to address the landed upon question from above - exploring the predictive power of the acoustic characteristics of an audio track to determine a track's popularity - in a manner unique from existing work our team will use a random forest model; the model will perform regression over the continuous target variable *popularity*. Through exploratory analytics and further method decisions we seek to create a model with a sub 5% NMRSE for potential use in a real-world business context.
+In order to address the landed upon question from above - exploring the predictive power of the acoustic characteristics of an audio track to determine a track's popularity - in a manner unique from existing work our team will use a random forest model; the model will perform regression over the continuous target variable *popularity*. Through exploratory analytics and further method decisions we seek to create a model with a sub 15% NRMSE for potential use in a real-world business context.
 
 ## Preliminary Data Analysis - Count of Songs in Each Genre
 
@@ -648,7 +648,7 @@ paste("country_RF_2 test NRMSE:",rmse(rap_test$popularity, rap_test_predict$aggr
 * Once we split the dataset and only focused on individual genres we improved the RMSE by around 5
 * This is probably due to the fact that different genres are expected to have different characteristics
 
-### Our preliminary goal was to create a model that had a NMRSE below 0.05. While we were ultimately unable to accomplish that goal, we have a few ideas for next steps
+### Our preliminary goal was to create a model that had a NMRSE below 15%. We succeded in this goal, but have some ideas for future steps to further increase the accuracy
 
 * Look into metrics not included in the dataset we used such as release date/season, promotion budget, and artist popularity prior to the release
 * Another possible next step could be to run the lyrics of the songs through a sentiment analysis model to see the effect of adding the data into the dataset on our model's accuracy
