@@ -294,11 +294,10 @@ paste("pop_RF_2 test NRMSE:",rmse(pop_test$popularity, pop_test_predict$aggregat
 
 ## Exploration With Focused Data
 
-We followed the same steps as above when working with 6 other datasets: rap music, jazz music, country music, songs by Kenny Chesney, Miles Davis, and Drake.
+We followed the same steps as above when working with 3 subsets of our original dataset: rap music, jazz music, and country music.
 
-## Rap Data Prep
 
-```{r rapPrep, echo=T}
+```{r rapPrep, echo=F, include=T}
 # table(df$genre)
 df2 <-unique(df)
 df3 <- df2[df2$genre == 'Rap',]
@@ -640,3 +639,16 @@ rap_test_predict = predict(rap_RF_2,
 paste('country_RF_r test RMSE:', rmse(rap_test$popularity, rap_test_predict$aggregate), sep=' ')
 paste("country_RF_2 test NRMSE:",rmse(rap_test$popularity, rap_test_predict$aggregate)/(max(rap_test$popularity)- min(rap_test$popularity)), sep=" ")
 ```
+
+## Conclusions/Future Work
+
+### Conclusions
+
+* The model we created to predict popularity of a song regardless of genre could give an idea of how popular a song would be but had a rmse of ~14 once tuned
+* Once we split the dataset and only focused on individual genres we improved the RMSE by around 5
+* This is probably due to the fact that different genres are expected to have different characteristics
+
+### Our preliminary goal was to create a model that had a NMRSE below 0.05. While we were ultimately unable to accomplish that goal, we have a few ideas for next steps
+
+* Look into metrics not included in the dataset we used such as release date/season, promotion budget, and artist popularity prior to the release
+* Another possible next step could be to run the lyrics of the songs through a sentiment analysis model to see the effect of adding the data into the dataset on our model's accuracy
