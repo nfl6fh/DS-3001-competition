@@ -30,7 +30,8 @@ library(corrplot)
 
 
 ```{r}
-setwd("C:/Users/Student/OneDrive/DS-3001/")
+# setwd("C:/Users/Student/OneDrive/DS-3001/")
+setwd("C:/Users/Lyle_/Desktop/4 Yr Sem 1/DS 3001/DS-3001")
 df <- read.csv("data/SpotifyFeatures.csv")
 
 
@@ -155,6 +156,14 @@ varImpPlot(rap_RF_2,
            lcolor = "orange")
 
 
+
+```
+
+Visualization of key metrics for song popularity
+```{r}
+ggplot(final_rap, aes(x=speechiness, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Song Popularity by 'Speechiness'") 
+
+ggplot(final_rap, aes(x=danceability, y=popularity)) + geom_point(alpha=.1) + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Song Popularity by 'Danceability'")
 
 ```
 

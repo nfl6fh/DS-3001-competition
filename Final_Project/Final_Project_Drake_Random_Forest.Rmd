@@ -30,7 +30,8 @@ library(corrplot)
 
 
 ```{r}
-setwd("C:/Users/Student/OneDrive/DS-3001/")
+# setwd("C:/Users/Student/OneDrive/DS-3001/")
+setwd("C:/Users/Lyle_/Desktop/4 Yr Sem 1/DS 3001/DS-3001")
 df <- read.csv("data/SpotifyFeatures.csv")
 
 
@@ -38,6 +39,7 @@ table(df$genre)
 df2 <-unique(df)
 df3 <- df2[df2$artist_name == 'Drake',]
 final_rap <- df3[-c(1, 2, 3, 4)]
+final_rap <- unique(final_rap)
 
 ```
 
@@ -128,7 +130,7 @@ rap_RF_2 = randomForest(as.numeric(popularity)~.,
                               ntree = 1000,
                               mtry = 5,
                               replace = TRUE,
-                              sampsize = 400,
+                              sampsize = 140,
                               nodesize = 5,
                               importance = TRUE,
                               proximity = FALSE,
@@ -156,6 +158,14 @@ varImpPlot(rap_RF_2,
 
 
 ```
+
+Visualization of key metrics for song popularity
+```{r}
+ggplot(final_rap, aes(x=speechiness, y=popularity)) + geom_point() + geom_smooth(method="lm", formula=y~x, se=T) + labs(title = "Song Popularity by 'Speechiness'") 
+
+ggplot(final_rap, aes(x=reorder(key,popularity, FUN=median), y=popularity)) + geom_boxplot() + labs(title = "Song Popularity by 'Key'", xlab = "key") 
+```
+
 
 Once a final model has been selected (hyper-parameters of the model are set), evaluate the model using the test dataset. 
 ```{r}
